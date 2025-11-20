@@ -41,28 +41,42 @@ public class MautServiceImpl implements IMautService {
 		boolean istAutoRegistriert = istAutoRegistriert(kennzeichen);
 		boolean istManuellRegistriert = istManuellRegistriert(mautAbschnitt, kennzeichen);
 		// TODO weitere Logik
-		if(istAutoRegistriert){
-			try(PreparedStatement s = connection.prepareStatement("SELECT Achsen FROM Fahrzeug WHERE Kennzeichen = ? AND Abmeldedatum IS NULL")){
-				s.setString(1, kennzeichen);
-				ResultSet rs = s.executeQuery();
-				if(rs.next()){
-					int gespeicherteAchszahl = rs.getInt("Achsen");
-					if(gespeicherteAchszahl != achszahl){
-						throw new InvalidVehicleDataException("Achszahl stimmt nicht überein");
-					}
-				} else {
-					throw new DataException("Fahrzeug nicht gefunden");
-				}
-			} catch (SQLException e){
-				throw new DataException(e);
-			}
-		}
-
 		if(!istAutoRegistriert && !istManuellRegistriert) {
 			throw new UnkownVehicleException("Fahrzeug nicht registriert");
 		}
 
+		if (istAutoRegistriert) {
+			int gespeicherteAchsen = getAchsenFuerFahrzeug(kennzeichen);
+
+			if (gespeicherteAchsen != achszahl) {
+				throw new InvalidVehicleDataException("Achszahl stimmt nicht überein");
+			}
+		}
+
 	}
+
+	private int getAchsenFuerFahrzeug(String kennzeichen) {
+		String sql = "SELECT Achsen FROM Fahrzeug WHERE Kennzeichen = ? AND Abmeldedatum IS NULL";
+
+		try (PreparedStatement s = connection.prepareStatement(sql)) {
+			s.setString(1, kennzeichen);
+
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) {
+					return rs.getInt("Achsen");
+				} else {
+					// Dieser Fall sollte eigentlich nicht eintreten, da wir vorher 'istAutoRegistriert' prüfen,
+					// aber sicher ist sicher.
+					throw new DataException("Fahrzeug mit Kennzeichen " + kennzeichen + " nicht gefunden.");
+				}
+			}
+		} catch (SQLException e) {
+			throw new DataException(e);
+		}
+	}
+
+
+
 
 	private boolean istManuellRegistriert(int mautAbschnitt, String kennzeichen) {
 		try (PreparedStatement s = connection.prepareStatement("SELECT * FROM Buchung b" +
