@@ -3,6 +3,7 @@ package de.htwberlin.dbtech.aufgaben.ue03;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,16 +39,32 @@ public class MautServiceImpl implements IMautService {
 			throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException {
 		// 1. ist das Fahrzeug bekannt?
 		boolean istAutoRegistriert = istAutoRegistriert(kennzeichen);
+		boolean istManuellRegistriert = istManuellRegistriert(mautAbschnitt, kennzeichen);
 		// TODO weitere Logik
+		if(!istAutoRegistriert && !istManuellRegistriert) {
+			throw new UnkownVehicleException("Fahrzeug nicht registriert");
+		}
+	}
+
+	private boolean istManuellRegistriert(int mautAbschnitt, String kennzeichen) {
+		try (PreparedStatement s = connection.prepareStatement("SELECT * FROM Buchung b" +
+				" WHERE Kennzeichen = ? AND Abschnitts_Id = ?")) {
+			s.setString(1, kennzeichen);
+			s.setInt(2, mautAbschnitt);
+			ResultSet rs = s.executeQuery();
+			return rs.next();
+		} catch (SQLException e){
+			throw new DataException(e);
+		}
 	}
 
 	// Methode prüft, ob Fahrzeug im automatischen Verfahren bekannt ist
 	private boolean istAutoRegistriert(String kennzeichen) {
 		boolean istAutoRegistriert = false;
 		String sql = "SELECT * " +
-				"FROM Fahrzeug f" +
+				"FROM Fahrzeug " +
 				"WHERE Kennzeichen = ?" +
-				"AND f.Abmeldedatum is NULL";
+				"AND Abmeldedatum IS NULL";
 		try (PreparedStatement s = connection.prepareStatement(sql)) {
 			s.setString(1, kennzeichen);
 			ResultSet rs = s.executeQuery();
