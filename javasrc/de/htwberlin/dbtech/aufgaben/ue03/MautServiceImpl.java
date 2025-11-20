@@ -1,6 +1,9 @@
 package de.htwberlin.dbtech.aufgaben.ue03;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import de.htwberlin.dbtech.exceptions.DataException;
@@ -33,7 +36,27 @@ public class MautServiceImpl implements IMautService {
 	@Override
 	public void berechneMaut(int mautAbschnitt, int achszahl, String kennzeichen)
 			throws UnkownVehicleException, InvalidVehicleDataException, AlreadyCruisedException {
-		// TODO Auto-generated method stub
+		// 1. ist das Fahrzeug bekannt?
+		boolean istAutoRegistriert = istAutoRegistriert(kennzeichen);
+		// TODO weitere Logik
+	}
+
+	// Methode prüft, ob Fahrzeug im automatischen Verfahren bekannt ist
+	private boolean istAutoRegistriert(String kennzeichen) {
+		boolean istAutoRegistriert = false;
+		String sql = "SELECT * " +
+				"FROM Fahrzeug f" +
+				"WHERE Kennzeichen = ?" +
+				"AND f.Abmeldedatum is NULL";
+		try (PreparedStatement s = connection.prepareStatement(sql)) {
+			s.setString(1, kennzeichen);
+			ResultSet rs = s.executeQuery();
+			istAutoRegistriert = rs.next();
+		}
+		catch (Exception e) {
+			throw new DataException(e);
+		}
+		return istAutoRegistriert;
 	}
 
 
