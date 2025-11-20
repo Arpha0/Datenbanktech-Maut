@@ -41,9 +41,27 @@ public class MautServiceImpl implements IMautService {
 		boolean istAutoRegistriert = istAutoRegistriert(kennzeichen);
 		boolean istManuellRegistriert = istManuellRegistriert(mautAbschnitt, kennzeichen);
 		// TODO weitere Logik
+		if(istAutoRegistriert){
+			try(PreparedStatement s = connection.prepareStatement("SELECT Achsen FROM Fahrzeug WHERE Kennzeichen = ? AND Abmeldedatum IS NULL")){
+				s.setString(1, kennzeichen);
+				ResultSet rs = s.executeQuery();
+				if(rs.next()){
+					int gespeicherteAchszahl = rs.getInt("Achsen");
+					if(gespeicherteAchszahl != achszahl){
+						throw new InvalidVehicleDataException("Achszahl stimmt nicht überein");
+					}
+				} else {
+					throw new DataException("Fahrzeug nicht gefunden");
+				}
+			} catch (SQLException e){
+				throw new DataException(e);
+			}
+		}
+
 		if(!istAutoRegistriert && !istManuellRegistriert) {
 			throw new UnkownVehicleException("Fahrzeug nicht registriert");
 		}
+
 	}
 
 	private boolean istManuellRegistriert(int mautAbschnitt, String kennzeichen) {
