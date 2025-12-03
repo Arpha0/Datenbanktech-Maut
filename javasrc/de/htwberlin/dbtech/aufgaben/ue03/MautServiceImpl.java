@@ -45,14 +45,45 @@ public class MautServiceImpl implements IMautService {
 			throw new UnkownVehicleException("Fahrzeug nicht registriert");
 		}
 
+		int gespeicherteAchsen = 0;
 		if (istAutoRegistriert) {
-			int gespeicherteAchsen = getAchsenFuerFahrzeug(kennzeichen);
-
-			if (gespeicherteAchsen != achszahl) {
-				throw new InvalidVehicleDataException("Achszahl stimmt nicht überein");
-			}
+			gespeicherteAchsen = getAchsenFuerFahrzeug(kennzeichen);
+		} else {
+			gespeicherteAchsen = getAchsenFuerBuchung(mautAbschnitt, kennzeichen);
 		}
 
+		if (gespeicherteAchsen != achszahl) {
+			throw new InvalidVehicleDataException("Achszahl stimmt nicht überein");
+		}
+
+	}
+
+	private int getAchsenFuerBuchung(int mautAbschnitt, String kennzeichen){
+		String sql = "SELECT k.Achszahl FROM Buchung b JOIN Mautkategorie k ON b.Kategorie_id = k.kategorie_id " +
+				"WHERE b.Abschnitts_id = ? AND b.Kennzeichen = ? AND b.b_id = 1";
+
+		try (PreparedStatement s = connection.prepareStatement(sql)){
+			s.setInt(1, mautAbschnitt);
+			s.setString(2, kennzeichen);
+
+			try (ResultSet rs = s.executeQuery()){
+				if (rs.next()){
+					// 1. Als String lesen (z.B. "= 4")
+					String achsenString = rs.getString(1);
+
+					// 2. Alles entfernen, was keine Zahl ist (z.B. "=", ">", " ")
+					// Alles außer Ziffern 0-9 löschen.
+					String nurZahlen = achsenString.replaceAll("[^0-9]", "");
+
+					// 3. In int umwandeln
+					return Integer.parseInt(nurZahlen);
+				} else {
+					throw new DataException("Offene Buchung für Fahrzeug " + kennzeichen + " nicht gefunden.");
+				}
+			}
+		} catch (SQLException e) {
+			throw new DataException(e);
+		}
 	}
 
 	private int getAchsenFuerFahrzeug(String kennzeichen) {
@@ -76,8 +107,6 @@ public class MautServiceImpl implements IMautService {
 	}
 
 
-
-
 	private boolean istManuellRegistriert(int mautAbschnitt, String kennzeichen) {
 		try (PreparedStatement s = connection.prepareStatement("SELECT * FROM Buchung b" +
 				" WHERE Kennzeichen = ? AND Abschnitts_Id = ?")) {
@@ -95,7 +124,7 @@ public class MautServiceImpl implements IMautService {
 		boolean istAutoRegistriert = false;
 		String sql = "SELECT * " +
 				"FROM Fahrzeug " +
-				"WHERE Kennzeichen = ?" +
+				"WHERE Kennzeichen = ? " +
 				"AND Abmeldedatum IS NULL";
 		try (PreparedStatement s = connection.prepareStatement(sql)) {
 			s.setString(1, kennzeichen);
