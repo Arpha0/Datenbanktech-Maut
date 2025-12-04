@@ -49,13 +49,36 @@ public class MautServiceImpl implements IMautService {
 		if (istAutoRegistriert) {
 			gespeicherteAchsen = getAchsenFuerFahrzeug(kennzeichen);
 		} else {
-			gespeicherteAchsen = getAchsenFuerBuchung(mautAbschnitt, kennzeichen);
+			try {
+				gespeicherteAchsen = getAchsenFuerBuchung(mautAbschnitt, kennzeichen);
+			} catch (DataException e) {
+				if (hatAbgeschlosseneBuchung(mautAbschnitt, kennzeichen)) {
+					throw new AlreadyCruisedException("Doppelbefahrung erkannt");
+				} else {
+					throw e;
+				}
+			}
 		}
 
 		if (gespeicherteAchsen != achszahl) {
 			throw new InvalidVehicleDataException("Achszahl stimmt nicht überein");
 		}
 
+	}
+
+	private boolean hatAbgeschlosseneBuchung(int mautAbschnitt, String kennzeichen) {
+		String sql = "SELECT * FROM Buchung WHERE Abschnitts_id = ? AND Kennzeichen = ? AND b_id = 3";
+
+		try (PreparedStatement s = connection.prepareStatement(sql)){
+			s.setInt(1, mautAbschnitt);
+			s.setString(2, kennzeichen);
+
+			try (ResultSet rs = s.executeQuery()){
+				return rs.next();
+			}
+		} catch (SQLException e) {
+			throw new DataException(e);
+		}
 	}
 
 	private int getAchsenFuerBuchung(int mautAbschnitt, String kennzeichen){
@@ -68,14 +91,14 @@ public class MautServiceImpl implements IMautService {
 
 			try (ResultSet rs = s.executeQuery()){
 				if (rs.next()){
-					// 1. Als String lesen (z.B. "= 4")
+					// Als String lesen (z.B. "= 4")
 					String achsenString = rs.getString(1);
 
-					// 2. Alles entfernen, was keine Zahl ist (z.B. "=", ">", " ")
+					// Alles entfernen, was keine Zahl ist (z.B. "=", ">", " ")
 					// Alles außer Ziffern 0-9 löschen.
 					String nurZahlen = achsenString.replaceAll("[^0-9]", "");
 
-					// 3. In int umwandeln
+					// In int umwandeln
 					return Integer.parseInt(nurZahlen);
 				} else {
 					throw new DataException("Offene Buchung für Fahrzeug " + kennzeichen + " nicht gefunden.");
@@ -96,8 +119,6 @@ public class MautServiceImpl implements IMautService {
 				if (rs.next()) {
 					return rs.getInt("Achsen");
 				} else {
-					// Dieser Fall sollte eigentlich nicht eintreten, da wir vorher 'istAutoRegistriert' prüfen,
-					// aber sicher ist sicher.
 					throw new DataException("Fahrzeug mit Kennzeichen " + kennzeichen + " nicht gefunden.");
 				}
 			}
@@ -122,16 +143,16 @@ public class MautServiceImpl implements IMautService {
 	// Methode prüft, ob Fahrzeug im automatischen Verfahren bekannt ist
 	private boolean istAutoRegistriert(String kennzeichen) {
 		boolean istAutoRegistriert = false;
-		String sql = "SELECT * " +
-				"FROM Fahrzeug " +
-				"WHERE Kennzeichen = ? " +
-				"AND Abmeldedatum IS NULL";
+		String sql = "SELECT f.FZ_ID FROM Fahrzeug f " +
+				"JOIN Fahrzeuggerat fg ON f.fz_id = fg.fz_id " +
+				"WHERE f.Kennzeichen = ? " +
+				"AND f.Abmeldedatum IS NULL";
 		try (PreparedStatement s = connection.prepareStatement(sql)) {
 			s.setString(1, kennzeichen);
-			ResultSet rs = s.executeQuery();
-			istAutoRegistriert = rs.next();
-		}
-		catch (Exception e) {
+			try(ResultSet rs = s.executeQuery()) {
+				istAutoRegistriert = rs.next();
+			}
+		} catch (Exception e) {
 			throw new DataException(e);
 		}
 		return istAutoRegistriert;
